@@ -1,0 +1,162 @@
+#!/usr/bin/python
+
+import requests
+import time
+import json
+import math
+
+number_of_lights = 5
+
+ip_hue = '192.168.1.2'
+url_hue = 'http://' + ip_hue + '/api/<your HUE ID>/lights/'
+payload_on_color = '{"on":true,"hue":10, "bri": 200,"sat":250, "transitiontime":0}'
+payload_color = '{"hue":250, "sat":250, "transitiontime":50}'
+payload_on = '{"on": true, "bri": 1, "transitiontime":0}'
+payload_off = '{"on": false, "bri": 1, "transitiontime":0}'
+payload_lowest = '{"on": false, "transitiontime":5}'
+payload_highest = '{"on": true, "bri": 125, "transitiontime":5}'
+
+#turn off all lights
+url = url_hue + '1/state'
+r = requests.put(url, data=payload_lowest)
+url = url_hue + '2/state'
+r = requests.put(url, data=payload_lowest)
+url = url_hue + '3/state'
+r = requests.put(url, data=payload_lowest)
+url = url_hue + '6/state'
+r = requests.put(url, data=payload_lowest)
+url = url_hue + '4/state'
+r = requests.put(url, data=payload_lowest)
+url = url_hue + '5/state'
+r = requests.put(url, data=payload_lowest)
+url = url_hue + '6/state'
+r = requests.put(url, data=payload_lowest)
+url = url_hue + '7/state'
+r = requests.put(url, data=payload_lowest)
+url = url_hue + '8/state'
+r = requests.put(url, data=payload_lowest)
+#time.sleep (2)
+
+def lower_hue(hue, ip_hue, url_hue):
+  hue = hue - 300
+  if hue < 0:
+    hue = 0
+  print "lower hue to: " + str(int(hue))
+  payload_on_color = '{"on":true,"hue":' + str(int(hue)) + ', "bri": 254,"sat":250, "transitiontime":1}'
+  time.sleep(.3)
+  r = requests.put('http://' + ip_hue + '/api/<your HUE ID>/lights/7/state', data=payload_on_color)
+#  print "color return: " + r.text
+  return(hue)
+
+def speed_light(two_hour_count, five_minute_count):
+  short_term_minute_count = five_minute_count/5.0
+  long_term_minute_count = 2.0 * (two_hour_count/120.0)
+  if long_term_minute_count < 1:
+    long_term_minute_count = 1
+  hue = math.floor((65534.0 * (short_term_minute_count / long_term_minute_count)) +.5)
+  if hue < 0:
+    hue = 0
+  if hue > 55534:
+    hue = 55534
+#  print "hue: " + str(int(hue))
+#  payload_on_color = '{"on":true,"hue":' + str(int(hue)) + ', "bri": 254,"sat":250, "transitiontime":10}'
+#  time.sleep(.3)
+#  r = requests.put('http://' + ip_hue + '/api/<your hue id>/lights/3/state', data=payload_on_color)
+#  print "color return: " + r.text
+  return int(hue)
+
+# POST with JSON 
+two_hour_count_filter = '{ "query": { "filtered": { "filter": { "range": { "@timestamp": { "gt": "now-2h" } } } } } }'
+five_minute_count_filter = '{ "query": { "filtered": { "filter": { "range": { "@timestamp": { "gt": "now-5m" } } } } } }'
+#get initial count
+es_url = 'http://<your elasticsearch URL>:9200'
+es_json= requests.get(es_url + "/twitter*/_count", auth=('<your elasticsearch login name>', '<your elasticsearch login password>'))
+old_count = json.loads(es_json.text)['count'] - 20
+#print 'old count: ' + str(old_count)
+two_hour_old = 0
+five_minute_old = 0
+try:
+  es_json= requests.get(es_url + "/twitter*/_count", auth=('<your elasticsearch login name>', '<your elasticsearch login password>'), data=two_hour_count_filter)
+  two_hour_count = json.loads(es_json.text)['count']
+except requests.exceptions.RequestException as e:
+  print "error: " + str(e)
+print "two hour count: " + str(two_hour_count)
+
+try:
+  es_json= requests.get(es_url + "/twitter*/_count", auth=('<your elasticsearch login name>', '<your elasticsearch login password>'), data=five_minute_count_filter)
+  five_minute_count = json.loads(es_json.text)['count']
+except requests.exceptions.RequestException as e:
+  print "error: " + str(e)
+print "five minute count: " + str(five_minute_count)
+
+new_hue = speed_light(two_hour_count, five_minute_count)
+c_hue = new_hue
+two_hour_old = two_hour_count
+five_minute_old = five_minute_count
+
+last_light = 1
+#spin lights
+while True:
+  try:
+    es_json= requests.get(es_url + "/twitter*/_count", auth=('<your elasticsearch login name>', '<your elasticsearch login password>'))
+    new_count = json.loads(es_json.text)['count']
+  except requests.exceptions.RequestException as e:
+    print "error: " + str(e)
+  print "new count: " + str(new_count)
+  if old_count != new_count:
+    old_count += 1
+    print "rotate lights" 
+    next_light = (last_light + 1 ) % number_of_lights
+
+    if next_light == 2:
+      next_light = 3
+    url_next = url_hue + str(next_light + 1) + '/state'
+#    print "url_next: " + url_next
+#    print payload_highest
+    time.sleep(.2)
+    r = requests.put(url_next, data=payload_highest)
+    time.sleep(.1)
+    r = requests.put(url_next, data=payload_highest)
+#    print r.text
+
+    if next_light == 2:
+      next_light = 3
+    url_last = url_hue + str(last_light + 1) + '/state'
+#    print "url_last: " + url_last
+#    print payload_lowest
+    time.sleep(.2)
+    r = requests.put(url_last, data=payload_lowest)
+    time.sleep(.1)
+    r = requests.put(url_last, data=payload_lowest)
+#    print r.text
+
+    last_light = (last_light + 1 ) % number_of_lights
+    if last_light == 2:
+      last_light = 3
+
+  try:
+    es_json= requests.get(es_url + "/twitter*/_count", auth=('<your elasticsearch login name>', '<your elasticsearch login password>'), data=two_hour_count_filter)
+    two_hour_count = json.loads(es_json.text)['count']
+  except requests.exceptions.RequestException as e:
+    print "error: " + str(e)
+  print "two hour count: " + str(two_hour_count)
+
+  try:
+    es_json= requests.get(es_url + "/twitter*/_count", auth=('<your elasticsearch login name>', '<your elasticsearch login password>'), data=five_minute_count_filter)
+    five_minute_count = json.loads(es_json.text)['count']
+  except requests.exceptions.RequestException as e:
+    print "error: " + str(e)
+  print "five minute count: " + str(five_minute_count)
+
+  if (two_hour_old != two_hour_count) or (five_minute_old != five_minute_count):
+    c_hue = speed_light(two_hour_count, five_minute_count)
+    two_hour_old = two_hour_count
+    five_minute_old = five_minute_count
+  c_hue = lower_hue(c_hue, ip_hue, url_hue)
+
+  time.sleep(1)
+
+    
+
+#print r.text
+#print r.status_code
