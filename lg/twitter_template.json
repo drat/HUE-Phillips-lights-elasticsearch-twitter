@@ -1,0 +1,59 @@
+{
+  "template": "twitter*",
+  "settings": {
+    "number_of_shards": 4,
+    "number_of_replicas": 0
+  },
+  "mappings": {
+    "_default_": {
+      "_all": { "enabled": true } ,
+      "properties" : {
+        "@timestamp" :{"type": "date", "format": "dateOptionalTime" },
+        "text" : {  "type": "string", "index": "analyzed" },
+        "user" : {
+          "type" : "object" ,
+          "properties" : {
+            "description" : {  "type": "string", "index": "analyzed" }
+          }
+        },
+        "coordinates" : {
+          "type" : "object" ,
+          "dynamic": true,
+          "properties" : {
+            "coordinates" : {  "type": "geo_point", "index": "not_analyzed" }
+          }
+        },
+        "entities" : {
+          "type" : "object" ,
+          "properties" : {
+            "hashtags" : {
+              "type" : "object" ,
+              "properties" : {
+                "text" : { "type": "string", "index": "analyzed" }
+              }
+            }
+          }
+        },
+        "retweeted_status" : {
+          "type" : "object" ,
+          "properties" : {
+            "text" : {  "type": "string", "index": "analyzed" }
+          }
+        }
+
+      },
+      "dynamic_templates":[
+            {
+               "string_template":{
+                  "match" :"*",
+                  "match_mapping_type":"string",
+                  "mapping": { "index": "not_analyzed", "type":"string",
+                     "fields": {
+                         "raw": {"type": "string", "index": "not_analyzed", "ignore_above": 256}
+                         }
+                   }
+               }
+            }
+         ]  }
+  }
+}

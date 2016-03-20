@@ -1,0 +1,6 @@
+#!/bin/bash
+
+
+THERE=`ps -ef | grep python | grep twit`
+if [[ $? = "1" ]]; then /usr/bin/python -u /home/ec2-user/twit >>/home/ec2-user/twit.log 2>&1 & fi
+

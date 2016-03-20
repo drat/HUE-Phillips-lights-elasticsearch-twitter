@@ -1,0 +1,6 @@
+#!/bin/bash
+
+
+THERE=`ps -ef | grep logstash | grep java`
+if [[ $? = "1" ]]; then /home/ec2-user/lg/logstash/bin/logstash -f /home/ec2-user/lg/elasticon.conf >>/home/ec2-user/lg/twit.log 2>&1 & fi
+
